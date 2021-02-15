@@ -437,7 +437,6 @@ GtkWidget *create_main_window (GtkApplication *app)
 static void
 cb_activate_main (GtkApplication *app, gpointer userdata)
 {
-    g_print ("activate\n");
     // ui の表示と入力待ち
     gtk_widget_show_all (ui);
     gtk_window_present (GTK_WINDOW(ui));
@@ -448,8 +447,6 @@ cb_startup_main (GtkApplication *app, gpointer userdata)
 {
     GKeyFile *kconf;
     gchar *prjpath;
-
-    g_print ("start up.\n");
 
     //~ g_set_application_name (PACKAGE_NAME);
 
@@ -469,7 +466,7 @@ cb_startup_main (GtkApplication *app, gpointer userdata)
 static void
 cb_shutdown_main (GtkApplication *app, gpointer userdata)
 {
-    g_print ("shutdown.\n");
+    //~ g_print ("shutdown.\n");
 }
 
 gint main (gint argc, gchar **argv)
