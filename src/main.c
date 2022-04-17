@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 
 #include <glib.h>
 #include <glib/gi18n.h>
@@ -222,6 +223,7 @@ static void launch_geany (GtkWidget *widget)
     GtkTreeSelection *selection;
     GtkListStore *store;
     GtkTreeIter iter;
+    pid_t pid;
 
     selection = gtk_tree_view_get_selection (widget);
     store = gtk_tree_view_get_model (widget);
@@ -229,16 +231,34 @@ static void launch_geany (GtkWidget *widget)
                                                 &iter) == TRUE ) {
         gtk_tree_model_get (store, &iter, 3, &execprj, -1);
     }
+
     if (execprj != NULL) {
-        // 出来る限り g_free で開放したいので環境にコピーを取る
-        if (!setenv (PROJECTNAME, execprj, !0)) {
+        pid = fork ();
+        if (pid == -1) {
+            // エラー
+            g_error ("起動に失敗しました。エラー番号 %d\n", errno);
+        }
+        else if (pid == 0) {
+            // 子プロセス
+            // 出来る限り g_free で開放したいので環境にコピーを取る
+            if (!setenv (PROJECTNAME, execprj, !0)) {
+                g_free (execprj);
+                execprj = NULL;
+            }
+            execlp ("geany", "geany", "-i",
+                    (execprj == NULL) ? getenv (PROJECTNAME) : execprj,
+                    (char*)NULL);
+        }
+        else {
+            // 親プロセス
+            g_print ("子プロセス %d を起動しました。\n", pid);
             g_free (execprj);
             execprj = NULL;
         }
-        g_signal_connect_after (ui, "destroy",
-                    G_CALLBACK (cb_destroy_after), NULL);
+        //~ g_signal_connect_after (ui, "destroy",
+                    //~ G_CALLBACK (cb_destroy_after), NULL);
     }
-    gtk_widget_destroy (ui);
+    //~ gtk_widget_destroy (ui);
 }
 
 static gboolean cb_button_press_event(GtkWidget *widget,
@@ -404,7 +424,7 @@ GtkWidget *create_main_window (GtkApplication *app)
     //~ btn_open = gtk_button_new_from_stock (GTK_STOCK_OPEN);
     btn_open = gtk_button_new_with_label ("Open");
     //~ btn_cancel = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
-    btn_cancel = gtk_button_new_with_label ("Cancel");
+    btn_cancel = gtk_button_new_with_label ("Close");
     g_signal_connect (G_OBJECT(btn_open), "clicked",
                         G_CALLBACK(cb_btnopen_clicked), pv);
     g_signal_connect (G_OBJECT(btn_cancel), "clicked",
@@ -412,8 +432,8 @@ GtkWidget *create_main_window (GtkApplication *app)
     //~ btnbox = gtk_hbutton_box_new ();
     btnbox = gtk_button_box_new (GTK_ORIENTATION_HORIZONTAL);
     gtk_button_box_set_layout (GTK_BUTTON_BOX(btnbox), GTK_BUTTONBOX_END);
-    gtk_box_pack_start (GTK_BOX(btnbox), btn_cancel, FALSE, FALSE, 0);
-    gtk_box_pack_end (GTK_BOX(btnbox), btn_open, FALSE, FALSE, 0);
+    gtk_box_pack_start (GTK_BOX(btnbox), btn_open, FALSE, FALSE, 0);
+    gtk_box_pack_end (GTK_BOX(btnbox), btn_cancel, FALSE, FALSE, 0);
 
     // まとめ
     //~ hbox = gtk_hbox_new (FALSE, 5);
