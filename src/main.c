@@ -186,7 +186,6 @@ GKeyFile *load_geany_config (void)
  */
 static GtkWidget *ui;
 static GtkListStore *projectlist;
-static gchar *execprj;  // uiが破壊されてから参照される為、ここに一時コピーを持つ。
 
 void projectview_set_projectinfo (Projectinfo *prj)
 {
@@ -201,64 +200,70 @@ void projectview_set_projectinfo (Projectinfo *prj)
                             -1 );
 }
 
-/*
- * geany 起動用コールバック
- * uiを破壊した直後に実行される
- */
-static gboolean cb_destroy_after (GtkWidget *widget, GdkEventKey *event,
-                        gpointer data) {
-    // execprj は このコールバック登録前に g_freeで開放されているが、環境へのコピーが
-    // 失敗した場合はそのまま参照される。
-    //~ g_message ("getenv:%s", getenv (PROJECTNAME));
-    execlp ("geany", "geany", "-i",
-        (execprj == NULL) ? getenv (PROJECTNAME) : execprj,
-        (char*)NULL);
-}
 
 /*
  * UI に格納されたプロジェクトファイル名を引数にして geany を起動する
+ * ダブル fork で このプログラム自体から切り離して起動する。
  */
 static void launch_geany (GtkWidget *widget)
 {
     GtkTreeSelection *selection;
     GtkListStore *store;
     GtkTreeIter iter;
-    pid_t pid;
+    gchar *execprj;
+    pid_t pid, pid_2;
+    int status;
 
-    selection = gtk_tree_view_get_selection (widget);
-    store = gtk_tree_view_get_model (widget);
-    if (gtk_tree_selection_get_selected (selection, &store,
-                                                &iter) == TRUE ) {
-        gtk_tree_model_get (store, &iter, 3, &execprj, -1);
+    if (widget != NULL) {
+        // UIからプロジェクト名を得る
+        selection = gtk_tree_view_get_selection (widget);
+        store = gtk_tree_view_get_model (widget);
+        if (gtk_tree_selection_get_selected (selection, &store,
+                                                    &iter) == TRUE ) {
+            gtk_tree_model_get (store, &iter, 3, &execprj, -1);
+        }
+    }
+    else {
+        execprj = NULL;
     }
 
-    if (execprj != NULL) {
-        pid = fork ();
-        if (pid == -1) {
+    pid = fork ();
+    if (pid == -1) {
+        // エラー
+        g_error ("起動に失敗しました。エラー番号 %d\n", errno);
+        g_free (execprj);
+    }
+    else if (pid == 0) {
+        // 子プロセス
+        pid_2 = fork();
+        if (pid_2 == -1) {
             // エラー
             g_error ("起動に失敗しました。エラー番号 %d\n", errno);
         }
-        else if (pid == 0) {
-            // 子プロセス
-            // 出来る限り g_free で開放したいので環境にコピーを取る
-            if (!setenv (PROJECTNAME, execprj, !0)) {
-                g_free (execprj);
-                execprj = NULL;
+        else if (pid_2 == 0) {
+            if (execprj != NULL) {
+                // 出来る限り g_free で開放したいので環境にコピーを取る
+                if (!setenv (PROJECTNAME, execprj, !0)) {
+                    g_free (execprj);
+                    execprj = getenv (PROJECTNAME);
+                }
             }
-            execlp ("geany", "geany", "-i",
-                    (execprj == NULL) ? getenv (PROJECTNAME) : execprj,
-                    (char*)NULL);
+            execlp ("geany", "geany", "-i", execprj, (char*)NULL);
+            // 戻ってきたら失敗
+            g_error ("起動に失敗しました。エラー番号 %d\n", errno);
         }
         else {
-            // 親プロセス
-            g_print ("子プロセス %d を起動しました。\n", pid);
+            g_print ("孫プロセス %d を起動しました。\n", pid_2);
             g_free (execprj);
-            execprj = NULL;
+            exit (0);
         }
-        //~ g_signal_connect_after (ui, "destroy",
-                    //~ G_CALLBACK (cb_destroy_after), NULL);
     }
-    //~ gtk_widget_destroy (ui);
+    else {
+        // 親プロセス
+        g_print ("子プロセス %d を起動しました。\n", pid);
+        waitpid (pid, &status, 0);
+        g_free (execprj);
+    }
 }
 
 static gboolean cb_button_press_event(GtkWidget *widget,
@@ -401,12 +406,17 @@ static gboolean cb_btnopen_clicked (GtkWidget *widget, GtkWidget *view)
     launch_geany (view);
 }
 
+static gboolean cb_btnblank_clicked (GtkWidget *widget, GtkWidget *view)
+{
+    launch_geany (NULL);
+}
+
 GtkWidget *create_main_window (GtkApplication *app)
 {
     GtkWidget *window;
     GtkWidget *vbox, *hbox;
     GtkWidget *pv, *sw;
-    GtkWidget *btn_open, *btn_cancel, *btnbox;
+    GtkWidget *btn_blank, *btn_open, *btn_cancel, *btnbox;
 
     window = gtk_application_window_new (app);
 
@@ -421,25 +431,25 @@ GtkWidget *create_main_window (GtkApplication *app)
     //~ gtk_widget_set_size_request (sw, 640, 400);
 
     // ボタン
-    //~ btn_open = gtk_button_new_from_stock (GTK_STOCK_OPEN);
+    btn_blank = gtk_button_new_with_label ("Blank");
     btn_open = gtk_button_new_with_label ("Open");
-    //~ btn_cancel = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
     btn_cancel = gtk_button_new_with_label ("Close");
+    g_signal_connect (G_OBJECT(btn_blank), "clicked",
+                        G_CALLBACK(cb_btnblank_clicked), pv);
     g_signal_connect (G_OBJECT(btn_open), "clicked",
                         G_CALLBACK(cb_btnopen_clicked), pv);
     g_signal_connect (G_OBJECT(btn_cancel), "clicked",
                         G_CALLBACK(cb_btncacel_clicked), window);
-    //~ btnbox = gtk_hbutton_box_new ();
     btnbox = gtk_button_box_new (GTK_ORIENTATION_HORIZONTAL);
-    gtk_button_box_set_layout (GTK_BUTTON_BOX(btnbox), GTK_BUTTONBOX_END);
+    //~ gtk_button_box_set_layout (GTK_BUTTON_BOX(btnbox), GTK_BUTTONBOX_END);
+    gtk_button_box_set_layout (GTK_BUTTON_BOX(btnbox), GTK_BUTTONBOX_EXPAND);
+    gtk_box_pack_start (GTK_BOX(btnbox), btn_blank, FALSE, FALSE, 0);
     gtk_box_pack_start (GTK_BOX(btnbox), btn_open, FALSE, FALSE, 0);
     gtk_box_pack_end (GTK_BOX(btnbox), btn_cancel, FALSE, FALSE, 0);
 
     // まとめ
-    //~ hbox = gtk_hbox_new (FALSE, 5);
     hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_box_pack_start (GTK_BOX(hbox), sw, TRUE, TRUE, 5);
-    //~ vbox = gtk_vbox_new (FALSE, 5);
     vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 5);
     gtk_box_pack_start (GTK_BOX(vbox), hbox, TRUE, TRUE, 5);
     gtk_box_pack_end (GTK_BOX(vbox), btnbox, FALSE, FALSE, 5);
@@ -450,7 +460,6 @@ GtkWidget *create_main_window (GtkApplication *app)
     gtk_window_set_position (GTK_WINDOW(window), GTK_WIN_POS_CENTER);
     //~ g_signal_connect (window, "destroy",
                         //~ G_CALLBACK(gtk_main_quit), NULL);
-    execprj = NULL;
     return window;
 }
 
