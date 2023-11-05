@@ -200,7 +200,6 @@ void projectview_set_projectinfo (Projectinfo *prj)
                             -1 );
 }
 
-
 /*
  * UI に格納されたプロジェクトファイル名を引数にして geany を起動する
  * ダブル fork で このプログラム自体から切り離して起動する。
