@@ -26,8 +26,9 @@
 #   include "config.h"
 #endif
 
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -159,9 +160,7 @@ GKeyFile *load_geany_config (void)
     GKeyFile *kconf;
     gchar *conf_filename;
 
-    conf_filename = g_strdup_printf ( "%s/%s",
-                                g_get_user_config_dir(), CONFIGFILE );
-    //~ g_message (conf_filename);
+    conf_filename = g_build_filename (g_get_user_config_dir(), CONFIGFILE, NULL);
     kconf = g_key_file_new ();
     if (g_key_file_load_from_file (kconf, conf_filename,
             G_KEY_FILE_NONE, NULL) == FALSE ) {
@@ -207,7 +206,8 @@ void projectview_set_projectinfo (Projectinfo *prj)
 static void launch_geany (GtkWidget *widget)
 {
     GtkTreeSelection *selection;
-    GtkListStore *store;
+    //~ GtkListStore *store;
+    GtkTreeModel *store;
     GtkTreeIter iter;
     gchar *execprj;
     pid_t pid, pid_2;
@@ -215,8 +215,8 @@ static void launch_geany (GtkWidget *widget)
 
     if (widget != NULL) {
         // UIからプロジェクト名を得る
-        selection = gtk_tree_view_get_selection (widget);
-        store = gtk_tree_view_get_model (widget);
+        selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(widget));
+        store = gtk_tree_view_get_model (GTK_TREE_VIEW(widget));
         if (gtk_tree_selection_get_selected (selection, &store,
                                                     &iter) == TRUE ) {
             gtk_tree_model_get (store, &iter, 3, &execprj, -1);
@@ -270,25 +270,18 @@ static gboolean cb_button_press_event(GtkWidget *widget,
                                         gpointer data)
 {
     // 左ボタン　ダブルクリック
-    if (event->button == 1 && event->type == GDK_2BUTTON_PRESS) {
-        launch_geany (widget);
-        return TRUE;
-    }
-    return FALSE;
+    return (event->button == 1 && event->type == GDK_2BUTTON_PRESS) ?
+        (launch_geany (widget), TRUE) :
+        FALSE;
 }
 
 static gboolean cb_key_press_event (GtkWidget *widget,
                                     GdkEventKey *event,
                                     gpointer data)
 {
-    gint kv;
-
-    kv = toupper (event->keyval);
-    if (kv == GDK_KEY_Return) {
-        launch_geany (widget);
-        return TRUE;
-    }
-    return FALSE;
+    return (toupper (event->keyval) == GDK_KEY_Return) ?
+        (launch_geany (widget), TRUE) :
+        FALSE;
 }
 
 static void cb_size_request (GtkWidget *widget,
@@ -315,9 +308,9 @@ static void cb_size_request (GtkWidget *widget,
     for (p = list; p != NULL; p = p->next) {
         if (p->data != NULL) {
             // 新しい表示幅を設定
+            g_object_set (p->data, "wrap-mode", PANGO_WRAP_WORD_CHAR, NULL);
             g_object_set (p->data, "wrap-width",
                 gtk_tree_view_column_get_width (column), NULL);
-            g_object_set (p->data, "wrap-mode", PANGO_WRAP_WORD_CHAR, NULL);
             //~ レンダラのサイズから行高さを得ようと目論んだが、得られる数値はどうも
             //~ ピクセル値のようである。これだと、Pangoからこのレンダラで使っている
             //~ フォントに応じた1行分のピクセル数を得ないと、行数が求まらない。
@@ -338,7 +331,7 @@ static void cb_size_request (GtkWidget *widget,
 
 static GtkWidget *create_projectview (void)
 {
-    GtkTreeView *view;
+    GtkWidget *view;
     GtkTreeViewColumn *column;
     GtkCellRenderer *renderer;
 
@@ -347,7 +340,7 @@ static GtkWidget *create_projectview (void)
                                             G_TYPE_STRING,  // 変更日時
                                             G_TYPE_STRING); // ファイル名
     view = gtk_tree_view_new_with_model (GTK_TREE_MODEL(projectlist));
-    gtk_tree_view_set_headers_visible (view, TRUE);
+    gtk_tree_view_set_headers_visible (GTK_TREE_VIEW(view), TRUE);
 
     //~ プロジェクトの名称
     renderer = gtk_cell_renderer_text_new ();
@@ -364,7 +357,8 @@ static GtkWidget *create_projectview (void)
     g_object_set (renderer, "wrap-width", 300, NULL);
     g_object_set (renderer, "wrap-mode", PANGO_WRAP_WORD_CHAR, NULL);
     // ここで表示行高さを指定しないと幅を変更したりソートした時におかしくなる
-    gtk_cell_renderer_text_set_fixed_height_from_font (renderer, 2);
+    gtk_cell_renderer_text_set_fixed_height_from_font (
+                                GTK_CELL_RENDERER_TEXT(renderer), 2);
     column = gtk_tree_view_column_new_with_attributes (
                 _("description"), renderer, "text", 1, NULL );
     gtk_tree_view_column_set_max_width (column, 300);
@@ -375,6 +369,7 @@ static GtkWidget *create_projectview (void)
 
     //~ 日時
     renderer = gtk_cell_renderer_text_new ();
+    g_object_set (renderer, "xalign", 0.5, NULL);
     column = gtk_tree_view_column_new_with_attributes (
                 _("mtime"), renderer, "text", 2, NULL );
     //~ gtk_tree_view_column_set_max_width (column, 160);
@@ -395,17 +390,17 @@ static GtkWidget *create_projectview (void)
     return view;
 }
 
-static gboolean cb_btncacel_clicked (GtkWidget *widget, gpointer window)
+static void cb_btncacel_clicked (GtkWidget *widget, gpointer window)
 {
     gtk_widget_destroy (window);
 }
 
-static gboolean cb_btnopen_clicked (GtkWidget *widget, GtkWidget *view)
+static void cb_btnopen_clicked (GtkWidget *widget, GtkWidget *view)
 {
     launch_geany (view);
 }
 
-static gboolean cb_btnblank_clicked (GtkWidget *widget, GtkWidget *view)
+static void cb_btnblank_clicked (GtkWidget *widget, GtkWidget *view)
 {
     launch_geany (NULL);
 }
