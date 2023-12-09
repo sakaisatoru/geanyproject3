@@ -23,13 +23,7 @@ if test "$enable_chooser" != "no"; then
         AC_DEFINE(ENABLE_CHOOSER, 1, [Define if GtkFileChooser is enabled.]))
 fi
 
-#~ PKG_CHECK_MODULES(GTK, gtk+-2.0)
 PKG_CHECK_MODULES(GTK, gtk+-3.0)
-#PKG_CHECK_MODULES(GTKSOURCEVIEW, gtksourceview-2.0)
-#PKG_CHECK_MODULES(LUA5_1, lua5.1)
-#PKG_CHECK_MODULES(CAIRO, cairo)
-#PKG_CHECK_MODULES(PANGO, pango)
-#PKG_CHECK_MODULES(PANGOCAIRO, pangocairo)
 
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h libintl.h stdlib.h string.h sys/time.h unistd.h])
@@ -39,16 +33,6 @@ AC_TYPE_SIZE_T
 
 # Checks for library functions.
 AC_CHECK_FUNCS([select setlocale strchr strrchr strstr])
-
- #~ po/Makefile.in
- #~ data/Makefile
- #~ data/icons/16x16/Makefile
- #~ data/icons/22x22/Makefile
- #~ data/icons/24x24/Makefile
- #~ data/icons/32x32/Makefile
- #~ data/icons/48x48/Makefile
- #~ data/icons/Makefile
- #~ data/icons/scalable/Makefile
 
 AC_CONFIG_FILES([Makefile po/Makefile.in
                  src/Makefile])
