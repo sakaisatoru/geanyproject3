@@ -187,6 +187,69 @@ GKeyFile *load_geany_config (void)
 static GtkWidget *ui;
 static GtkListStore *projectlist;
 
+#if 0
+static void
+filter_modify_func (GtkTreeModel *model,
+                    GtkTreeIter  *iter,
+                    GValue       *value,
+                    gint          column,
+                    gpointer      data)
+{
+  GtkTreeModelFilter *filter_model = GTK_TREE_MODEL_FILTER (model);
+  gint width, height;
+  GtkTreeModel *child_model;
+  GtkTreeIter child_iter;
+
+  child_model = gtk_tree_model_filter_get_model (filter_model);
+  gtk_tree_model_filter_convert_iter_to_child_iter (filter_model, &child_iter, iter);
+
+  gtk_tree_model_get (child_model, &child_iter,
+                      WIDTH_COLUMN, &width,
+                      HEIGHT_COLUMN, &height,
+                      -1);
+
+  switch (column)
+    {
+    case WIDTH_COLUMN:
+      g_value_set_int (value, width);
+      break;
+    case HEIGHT_COLUMN:
+      g_value_set_int (value, height);
+      break;
+    case AREA_COLUMN:
+      g_value_set_int (value, width * height);
+      break;
+    case SQUARE_COLUMN:
+      g_value_set_boolean (value, width == height);
+      break;
+    default:
+      g_assert_not_reached ();
+    }
+}
+#endif
+const gchar *searchvalue;
+static gboolean
+visible_func (GtkTreeModel *model,
+              GtkTreeIter  *iter,
+              gpointer      data)
+{
+    gchar *description;
+    gboolean f = TRUE;
+
+    gtk_tree_model_get (model, iter,
+                      1, &description,
+                      -1);
+    if (strlen (searchvalue) != 0) {
+        // 検索文字列が説明文に含まれない場合は表示しない
+        if (g_strrstr (description, searchvalue) == NULL) f = FALSE;
+    }
+    g_free (description);
+
+    return f;
+}
+
+
+
 void projectview_set_projectinfo (Projectinfo *prj)
 {
     GtkTreeIter iter;
@@ -387,6 +450,7 @@ static GtkWidget *create_projectview (void)
                         G_CALLBACK (cb_button_press_event), NULL);
     //~ g_signal_connect (view, "size-request",
                         //~ G_CALLBACK (cb_size_request), NULL);
+
     return view;
 }
 
@@ -400,6 +464,15 @@ static void cb_btnblank_clicked (GtkWidget *widget, GtkWidget *view)
 {
     launch_geany (NULL);
 }
+
+static void cb_search (GtkEntry *ent, GtkTreeModel *data)
+{
+    GtkEntryBuffer *entbuff = gtk_entry_get_buffer (ent);
+    searchvalue = gtk_entry_buffer_get_text (entbuff);
+    gtk_tree_model_filter_refilter (GTK_TREE_MODEL_FILTER(data));
+}
+
+
 
 GtkWidget *create_main_window (GtkApplication *app)
 {
@@ -429,6 +502,8 @@ GtkWidget *create_main_window (GtkApplication *app)
     g_signal_connect (G_OBJECT(btn_open), "clicked",
                         G_CALLBACK(cb_btnopen_clicked), pv);
 
+GtkEntryBuffer *entbuff = gtk_entry_buffer_new (NULL,256);
+GtkWidget *search = gtk_entry_new_with_buffer (entbuff);
 
     // ヘッダーバー
     header = gtk_header_bar_new ();
@@ -437,6 +512,7 @@ GtkWidget *create_main_window (GtkApplication *app)
     gtk_header_bar_set_title (GTK_HEADER_BAR (header), PACKAGE);
     gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_blank);
     gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_open);
+    gtk_header_bar_pack_start (GTK_HEADER_BAR (header), search);
 
     // まとめ
     hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 5);
@@ -455,6 +531,16 @@ GtkWidget *create_main_window (GtkApplication *app)
                 "pref_main_project_file_in_basedir", NULL) ? 0 : 1);
     g_key_file_free (kconf);
     g_free (prjpath);
+
+//~ static const gchar *searchvalue = gtk_entry_buffer_get_text (entbuff);
+searchvalue = gtk_entry_buffer_get_text (entbuff);
+GtkTreeModel *model= gtk_tree_model_filter_new (GTK_TREE_MODEL (projectlist), NULL);
+gtk_tree_model_filter_set_visible_func (GTK_TREE_MODEL_FILTER (model),
+                                              visible_func, NULL, NULL);
+gtk_tree_view_set_model (GTK_TREE_VIEW (pv), model);
+
+    g_signal_connect (G_OBJECT(search), "activate",
+                        G_CALLBACK(cb_search), model);
 
     return window;
 }
