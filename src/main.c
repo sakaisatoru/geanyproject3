@@ -55,7 +55,7 @@ typedef struct {
     gchar *timestamp;       // プロジェクトファイルの最終更新日時
 } Projectinfo;
 
-Projectinfo * projectinfo_new ()
+Projectinfo *projectinfo_new ()
 {
     Projectinfo *prj = g_malloc (sizeof(Projectinfo));
     if (prj != NULL) {
@@ -84,7 +84,7 @@ void projectview_set_projectinfo (Projectinfo *prj);
  * 指定したファイルからプロジェクトの情報を得る
  * 返されたProjectinfoは使用後開放すること。
  */
-Projectinfo * project_read_info (gchar *file)
+Projectinfo *project_read_info (gchar *file)
 {
     GKeyFile *kprjconf;
     Projectinfo *prj;
@@ -94,11 +94,11 @@ Projectinfo * project_read_info (gchar *file)
     kprjconf = g_key_file_new ();
     prj = projectinfo_new ();
     if (g_key_file_load_from_file (
-            kprjconf, file, G_KEY_FILE_NONE, NULL) == TRUE ) {
+            kprjconf, file, G_KEY_FILE_NONE, NULL) == TRUE) {
         prj->name = g_strdup (g_key_file_get_string (kprjconf,
-                                "project", "name", NULL) );
+                                "project", "name", NULL));
         prj->description = g_strdup (g_key_file_get_string (kprjconf,
-                                "project", "description", NULL) );
+                                "project", "description", NULL));
         prj->prjfilename = g_strdup (file);
         lstat (prj->prjfilename, &st);
         strftime (buf, sizeof(buf), "%F  %R", localtime (&st.st_mtime));
@@ -115,7 +115,8 @@ Projectinfo * project_read_info (gchar *file)
 void project_read_infofile (gchar *dir, gint level)
 {
     GDir *project_dir;
-    gchar *file, *path, *ext;
+    const gchar *file;
+    gchar *path, *ext;
     Projectinfo *prj;
     gint i;
 
@@ -124,14 +125,14 @@ void project_read_infofile (gchar *dir, gint level)
 
     project_dir = g_dir_open (dir, 0, NULL);
 
-    if ( project_dir == NULL ) {
-        g_error ( _("Fail to open directory.") );
+    if (project_dir == NULL) {
+        g_error (_("Fail to open directory."));
         return;
     }
 
-    while ( (file = g_dir_read_name (project_dir)) != NULL ) {
-        path = g_strdup_printf ( "%s/%s", dir, file );
-        if ( g_file_test (path, G_FILE_TEST_IS_DIR) == TRUE ) {
+    while ((file = g_dir_read_name (project_dir)) != NULL) {
+        path = g_strdup_printf ("%s/%s", dir, file);
+        if (g_file_test (path, G_FILE_TEST_IS_DIR) == TRUE) {
             // ディレクトリなのでその中に .geany がないか探す
             project_read_infofile (path, level+1);
         }
@@ -163,7 +164,7 @@ GKeyFile *load_geany_config (void)
     conf_filename = g_build_filename (g_get_user_config_dir(), CONFIGFILE, NULL);
     kconf = g_key_file_new ();
     if (g_key_file_load_from_file (kconf, conf_filename,
-            G_KEY_FILE_NONE, NULL) == FALSE ) {
+            G_KEY_FILE_NONE, NULL) == FALSE) {
         g_key_file_load_from_data (
             kconf,
             "[project]\n"               \
@@ -196,7 +197,7 @@ void projectview_set_projectinfo (Projectinfo *prj)
                             1, prj->description,
                             2, prj->timestamp,
                             3, prj->prjfilename,
-                            -1 );
+                            -1);
 }
 
 /*
@@ -206,7 +207,6 @@ void projectview_set_projectinfo (Projectinfo *prj)
 static void launch_geany (GtkWidget *widget)
 {
     GtkTreeSelection *selection;
-    //~ GtkListStore *store;
     GtkTreeModel *store;
     GtkTreeIter iter;
     gchar *execprj;
@@ -218,7 +218,7 @@ static void launch_geany (GtkWidget *widget)
         selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(widget));
         store = gtk_tree_view_get_model (GTK_TREE_VIEW(widget));
         if (gtk_tree_selection_get_selected (selection, &store,
-                                                    &iter) == TRUE ) {
+                                                    &iter) == TRUE) {
             gtk_tree_model_get (store, &iter, 3, &execprj, -1);
         }
     }
@@ -345,7 +345,7 @@ static GtkWidget *create_projectview (void)
     //~ プロジェクトの名称
     renderer = gtk_cell_renderer_text_new ();
     column = gtk_tree_view_column_new_with_attributes (
-                _("name"), renderer, "text", 0, NULL );
+                _("name"), renderer, "text", 0, NULL);
     gtk_tree_view_column_set_max_width (column, 200);
     g_object_set (column, "alignment", 0.5, NULL);
     gtk_tree_view_column_set_resizable (column, TRUE);
@@ -360,7 +360,7 @@ static GtkWidget *create_projectview (void)
     gtk_cell_renderer_text_set_fixed_height_from_font (
                                 GTK_CELL_RENDERER_TEXT(renderer), 2);
     column = gtk_tree_view_column_new_with_attributes (
-                _("description"), renderer, "text", 1, NULL );
+                _("description"), renderer, "text", 1, NULL);
     gtk_tree_view_column_set_max_width (column, 300);
     g_object_set (column, "alignment", 0.5, NULL);
     gtk_tree_view_column_set_resizable (column, TRUE);
@@ -371,7 +371,7 @@ static GtkWidget *create_projectview (void)
     renderer = gtk_cell_renderer_text_new ();
     g_object_set (renderer, "xalign", 0.5, NULL);
     column = gtk_tree_view_column_new_with_attributes (
-                _("mtime"), renderer, "text", 2, NULL );
+                _("mtime"), renderer, "text", 2, NULL);
     //~ gtk_tree_view_column_set_max_width (column, 160);
     g_object_set (column, "alignment", 0.5, NULL);
     gtk_tree_view_column_set_resizable (column, TRUE);
@@ -390,10 +390,6 @@ static GtkWidget *create_projectview (void)
     return view;
 }
 
-static void cb_btncacel_clicked (GtkWidget *widget, gpointer window)
-{
-    gtk_widget_destroy (window);
-}
 
 static void cb_btnopen_clicked (GtkWidget *widget, GtkWidget *view)
 {
@@ -407,10 +403,10 @@ static void cb_btnblank_clicked (GtkWidget *widget, GtkWidget *view)
 
 GtkWidget *create_main_window (GtkApplication *app)
 {
-    GtkWidget *window;
-    GtkWidget *vbox, *hbox;
+    GtkWidget *window, *header;
+    GtkWidget *hbox;
     GtkWidget *pv, *sw;
-    GtkWidget *btn_blank, *btn_open, *btn_cancel, *btnbox;
+    GtkWidget *btn_blank, *btn_open;
 
     window = gtk_application_window_new (app);
 
@@ -422,45 +418,58 @@ GtkWidget *create_main_window (GtkApplication *app)
     gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW(sw),
         GTK_SHADOW_IN);
     gtk_container_add (GTK_CONTAINER(sw), pv);
-    //~ gtk_widget_set_size_request (sw, 640, 400);
 
     // ボタン
-    btn_blank = gtk_button_new_with_label ("Blank");
-    btn_open = gtk_button_new_with_label ("Open");
-    btn_cancel = gtk_button_new_with_label ("Close");
+    btn_blank = gtk_button_new_from_icon_name ("document-new",
+                                                GTK_ICON_SIZE_BUTTON);
+    btn_open = gtk_button_new_from_icon_name ("document-open",
+                                                GTK_ICON_SIZE_BUTTON);
     g_signal_connect (G_OBJECT(btn_blank), "clicked",
                         G_CALLBACK(cb_btnblank_clicked), pv);
     g_signal_connect (G_OBJECT(btn_open), "clicked",
                         G_CALLBACK(cb_btnopen_clicked), pv);
-    g_signal_connect (G_OBJECT(btn_cancel), "clicked",
-                        G_CALLBACK(cb_btncacel_clicked), window);
-    btnbox = gtk_button_box_new (GTK_ORIENTATION_HORIZONTAL);
-    //~ gtk_button_box_set_layout (GTK_BUTTON_BOX(btnbox), GTK_BUTTONBOX_END);
-    gtk_button_box_set_layout (GTK_BUTTON_BOX(btnbox), GTK_BUTTONBOX_EXPAND);
-    gtk_box_pack_start (GTK_BOX(btnbox), btn_blank, FALSE, FALSE, 0);
-    gtk_box_pack_start (GTK_BOX(btnbox), btn_open, FALSE, FALSE, 0);
-    gtk_box_pack_end (GTK_BOX(btnbox), btn_cancel, FALSE, FALSE, 0);
+
+
+    // ヘッダーバー
+    header = gtk_header_bar_new ();
+    gtk_header_bar_set_decoration_layout (GTK_HEADER_BAR (header), "menu:close");
+    gtk_header_bar_set_show_close_button (GTK_HEADER_BAR (header), TRUE);
+    gtk_header_bar_set_title (GTK_HEADER_BAR (header), PACKAGE);
+    gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_blank);
+    gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_open);
 
     // まとめ
     hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_box_pack_start (GTK_BOX(hbox), sw, TRUE, TRUE, 5);
-    vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 5);
-    gtk_box_pack_start (GTK_BOX(vbox), hbox, TRUE, TRUE, 5);
-    gtk_box_pack_end (GTK_BOX(vbox), btnbox, FALSE, FALSE, 5);
-
-    gtk_container_add(GTK_CONTAINER(window), vbox);
-    gtk_window_set_title (GTK_WINDOW(window), _("Geany Project Viewer"));
+    gtk_container_add (GTK_CONTAINER(window), hbox);
+    gtk_window_set_titlebar (GTK_WINDOW (window), header);
     gtk_widget_set_size_request (window, 640, 480);
     gtk_window_set_position (GTK_WINDOW(window), GTK_WIN_POS_CENTER);
-    //~ g_signal_connect (window, "destroy",
-                        //~ G_CALLBACK(gtk_main_quit), NULL);
+
+    // 既定のディレクトリからプロジェクトファイルを読み込んで ui に格納する
+    GKeyFile *kconf = load_geany_config ();
+    gchar *prjpath = g_key_file_get_string (kconf, "project",
+                "project_file_path", NULL);
+    project_read_infofile (prjpath,
+            g_key_file_get_boolean (kconf, "geany",
+                "pref_main_project_file_in_basedir", NULL) ? 0 : 1);
+    g_key_file_free (kconf);
+    g_free (prjpath);
+
     return window;
 }
 
 static void
 cb_activate_main (GtkApplication *app, gpointer userdata)
 {
-    // ui の表示と入力待ち
+    GList *windows;
+    g_message ("activate.");
+
+    windows = gtk_application_get_windows (app);
+    if (windows == NULL) {
+        ui = create_main_window (app);
+    }
+
     gtk_widget_show_all (ui);
     gtk_window_present (GTK_WINDOW(ui));
 }
@@ -468,48 +477,36 @@ cb_activate_main (GtkApplication *app, gpointer userdata)
 static void
 cb_startup_main (GtkApplication *app, gpointer userdata)
 {
-    GKeyFile *kconf;
-    gchar *prjpath;
-
-    //~ g_set_application_name (PACKAGE_NAME);
-
-    ui = create_main_window (app);
-
-    // 既定のディレクトリからプロジェクトファイルを読み込んで ui に格納する
-    kconf = load_geany_config ();
-    prjpath = g_key_file_get_string (kconf, "project",
-                "project_file_path", NULL);
-    project_read_infofile (prjpath,
-            g_key_file_get_boolean (kconf, "geany",
-                "pref_main_project_file_in_basedir", NULL) ? 0 : 1 );
-    g_key_file_free (kconf);
-    g_free (prjpath);
+    g_message ("start up.");
 }
 
 static void
 cb_shutdown_main (GtkApplication *app, gpointer userdata)
 {
-    //~ g_print ("shutdown.\n");
+    g_message ("shutdown.\n");
 }
 
-gint main (gint argc, gchar **argv)
+static void init_locale (void)
 {
-    GtkApplication *app;
-    gint status;
-
     setlocale (LC_ALL, "");
     bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
-    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
     textdomain (GETTEXT_PACKAGE);
+}
+
+int main (gint argc, gchar **argv)
+{
+    GtkApplication *app;
+    int status;
+
+    init_locale ();
 
     app = gtk_application_new ("com.gmail.endeavor2wako.Geanyproject",
                                             G_APPLICATION_FLAGS_NONE);
-
     g_signal_connect (app, "activate", G_CALLBACK(cb_activate_main), NULL);
     g_signal_connect (app, "startup",  G_CALLBACK(cb_startup_main),  NULL);
     g_signal_connect (app, "shutdown", G_CALLBACK(cb_shutdown_main), NULL);
     status = g_application_run (G_APPLICATION(app), argc, argv);
-
     g_object_unref (app);
+
     return status;
 }
