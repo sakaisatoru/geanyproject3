@@ -76,6 +76,7 @@ gchar *terminal_cmd = NULL;
 enum {
     _LAUNCH_GEANY = 1,
     _LAUNCH_TERMINAL,
+    _LAUNCH_GITG,
 };
 
 Projectinfo *projectinfo_new ()
@@ -103,13 +104,11 @@ void projectinfo_free (Projectinfo *prj)
     }
 }
 
-void projectview_set_projectinfo (Projectinfo *prj);
-
 /*
  * 指定したファイルからプロジェクトの情報を得る
  * 返されたProjectinfoは使用後開放すること。
  */
-Projectinfo *project_read_info (gchar *file)
+Projectinfo *projectinfo_read_file (gchar *file)
 {
     GKeyFile *kprjconf;
     Projectinfo *prj;
@@ -136,10 +135,12 @@ Projectinfo *project_read_info (gchar *file)
     return prj;
 }
 
+static void projectview_set_projectinfo (Projectinfo *prj);
+
 /*
  * 指定されたディレクトリの中で [hoge].geanyファイルを探して表示関数に渡す
  */
-void project_read_infofile (gchar *dir, gint level)
+static void read_project_all (gchar *dir, gint level)
 {
     GDir *project_dir;
     const gchar *file;
@@ -161,7 +162,7 @@ void project_read_infofile (gchar *dir, gint level)
         path = g_strdup_printf ("%s/%s", dir, file);
         if (g_file_test (path, G_FILE_TEST_IS_DIR) == TRUE) {
             // ディレクトリなのでその中に .geany がないか探す
-            project_read_infofile (path, level+1);
+            read_project_all (path, level+1);
         }
         else {
             /* 拡張子が geany なら内容を読む */
@@ -169,7 +170,7 @@ void project_read_infofile (gchar *dir, gint level)
             if (ext != NULL) {
                 /* ファイル名の途中に.geanyが含まれている場合は扱わない */
                 if (!g_strcmp0 (ext, ".geany")) {
-                    prj = project_read_info (path);
+                    prj = projectinfo_read_file (path);
                     projectview_set_projectinfo (prj);
                     projectinfo_free (prj);
                 }
@@ -181,7 +182,7 @@ void project_read_infofile (gchar *dir, gint level)
 }
 
 /*
- * geany.conf を読んでプロジェクトの格納先を得る
+ * geany.conf
  */
 GKeyFile *load_geany_config (void)
 {
@@ -216,7 +217,8 @@ GKeyFile *load_geany_config (void)
 static GtkWidget *ui;
 static GtkListStore *projectlist;
 
-const gchar *searchvalue;
+static const gchar *searchvalue;
+
 static gboolean
 visible_func (GtkTreeModel *model,
               GtkTreeIter  *iter,
@@ -238,8 +240,7 @@ visible_func (GtkTreeModel *model,
 }
 
 
-
-void projectview_set_projectinfo (Projectinfo *prj)
+static void projectview_set_projectinfo (Projectinfo *prj)
 {
     GtkTreeIter iter;
     if (prj == NULL) return;
@@ -283,6 +284,10 @@ static void launch_geany (GtkWidget *widget, int mode)
                 execprj = g_strdup_printf ("--working-directory=%s", tmp);
                 g_free (tmp);
             }
+            else if (mode == _LAUNCH_GITG) {
+                gtk_tree_model_get (store, &iter, _P_BASE_PATH,
+                                                        &execprj, -1);
+            }
         }
     }
     else {
@@ -315,6 +320,9 @@ static void launch_geany (GtkWidget *widget, int mode)
             }
             else if (mode == _LAUNCH_TERMINAL) {
                 execlp (terminal_cmd, terminal_cmd, execprj, (char*)NULL);
+            }
+            else if (mode == _LAUNCH_GITG) {
+                execlp ("gitg", "gitg", execprj, (char*)NULL);
             }
             // 戻ってきたら失敗
             g_error ("起動に失敗しました。エラー番号 %d\n", errno);
@@ -352,51 +360,6 @@ static gboolean cb_key_press_event (GtkWidget *widget,
         FALSE;
 }
 
-static void cb_size_request (GtkWidget *widget,
-                GtkRequisition *requisition,
-                gpointer        user_data)
-{
-    //~ カラムの表示幅変更を受けて、表示されているテキストの改行位置を変更する。
-    //~ レンダラ及びカラムはGtkWidgetでないため、幅変更のシグナルを受け取れない（シグナル
-    //~ そのものが発生しないのでEventBoxで囲うのも無意味）。なので、上位のTreeViewで
-    //~ 受ける。
-    //~ この場合、TreeViewが複数のカラムを持っていると、どのカラムで幅変更が生じたのか直接
-    //~ 知る手段がない。今回は必要なカラムは一箇所だけなので固定値で参照している。
-    //~ また、幅変更の結果、行の高さが大きく狂うことがあり、仕方ないので2行に固定している。
-    //~ このほか、表示幅変更の影響を受けない行（セル）があったり、どうもGtkそのものにバグが
-    //~ 残っているような感じがする。
-
-    GList *list, *p;
-    GtkTreeViewColumn *column;
-    gint width, height, size;
-    gdouble sizepoint;
-
-    column = gtk_tree_view_get_column (GTK_TREE_VIEW(widget), 1);
-    list = gtk_cell_layout_get_cells (GTK_CELL_LAYOUT(column));
-    for (p = list; p != NULL; p = p->next) {
-        if (p->data != NULL) {
-            // 新しい表示幅を設定
-            g_object_set (p->data, "wrap-mode", PANGO_WRAP_WORD_CHAR, NULL);
-            g_object_set (p->data, "wrap-width",
-                gtk_tree_view_column_get_width (column), NULL);
-            //~ レンダラのサイズから行高さを得ようと目論んだが、得られる数値はどうも
-            //~ ピクセル値のようである。これだと、Pangoからこのレンダラで使っている
-            //~ フォントに応じた1行分のピクセル数を得ないと、行数が求まらない。
-            //~ gtk_cell_renderer_get_size (p->data, widget, NULL,
-                //~ NULL, NULL, &width, &height);
-            //~ g_object_get (p->data,
-                                //~ "size", &size,
-                                //~ "size-points", &sizepoint,
-                                //~ NULL);
-            //~ g_message ("x:%d, y:%d", width, height);
-            //~ g_message ("size:%d size-points:%f", size, sizepoint);
-            // セルの高さを行数で指定する。現在、2行で固定
-            //~ gtk_cell_renderer_text_set_fixed_height_from_font (p->data, -1);
-        }
-    }
-    g_list_free (list);
-}
-
 static GtkWidget *create_projectview (void)
 {
     GtkWidget *view;
@@ -418,7 +381,7 @@ static GtkWidget *create_projectview (void)
     gtk_tree_view_column_set_max_width (column, 200);
     g_object_set (column, "alignment", 0.5, NULL);
     gtk_tree_view_column_set_resizable (column, TRUE);
-    gtk_tree_view_column_set_sort_column_id (column, 0);
+    gtk_tree_view_column_set_sort_column_id (column, _P_NAME);
     gtk_tree_view_append_column (GTK_TREE_VIEW(view), column);
 
     //~ 説明文の表示。長いものは折り返す。
@@ -430,10 +393,10 @@ static GtkWidget *create_projectview (void)
                                 GTK_CELL_RENDERER_TEXT(renderer), 2);
     column = gtk_tree_view_column_new_with_attributes (
                 _("description"), renderer, "text", _P_DESCRIPTION, NULL);
-    gtk_tree_view_column_set_max_width (column, 300);
+    //~ gtk_tree_view_column_set_max_width (column, 300);
     g_object_set (column, "alignment", 0.5, NULL);
     gtk_tree_view_column_set_resizable (column, TRUE);
-    gtk_tree_view_column_set_sort_column_id (column, 1);
+    gtk_tree_view_column_set_sort_column_id (column, _P_DESCRIPTION);
     gtk_tree_view_append_column (GTK_TREE_VIEW(view), column);
 
     //~ 日時
@@ -441,21 +404,17 @@ static GtkWidget *create_projectview (void)
     g_object_set (renderer, "xalign", 0.5, NULL);
     column = gtk_tree_view_column_new_with_attributes (
                 _("mtime"), renderer, "text", _P_TIMESTAMP, NULL);
-    //~ gtk_tree_view_column_set_max_width (column, 160);
+    gtk_tree_view_column_set_max_width (column, 200);
     g_object_set (column, "alignment", 0.5, NULL);
     gtk_tree_view_column_set_resizable (column, TRUE);
-    gtk_tree_view_column_set_sort_column_id (column, 2);
+    gtk_tree_view_column_set_sort_column_id (column, _P_TIMESTAMP);
     gtk_tree_view_append_column (GTK_TREE_VIEW(view), column);
 
     //~ コールバック　
-    //~ GtkWidgetでないセルレンダラやカラムではシグナルの受信に難があるため、
-    //~ TreeViewで受ける。
     g_signal_connect (view, "key-press-event",
                         G_CALLBACK (cb_key_press_event), NULL);
     g_signal_connect (view, "button-press-event",
                         G_CALLBACK (cb_button_press_event), NULL);
-    //~ g_signal_connect (view, "size-request",
-                        //~ G_CALLBACK (cb_size_request), NULL);
 
     return view;
 }
@@ -474,6 +433,11 @@ static void cb_btnblank_clicked (GtkWidget *widget, GtkWidget *view)
 static void cb_btnterminal_clicked (GtkWidget *widget, GtkWidget *view)
 {
     launch_geany (view, _LAUNCH_TERMINAL);
+}
+
+static void cb_btngitg_clicked (GtkWidget *widget, GtkWidget *view)
+{
+    launch_geany (view, _LAUNCH_GITG);
 }
 
 static void
@@ -502,7 +466,7 @@ GtkWidget *create_main_window (GtkApplication *app)
     GtkWidget *window, *header;
     GtkWidget *hbox;
     GtkWidget *pv, *sw;
-    GtkWidget *btn_blank, *btn_open, *btn_terminal;
+    GtkWidget *btn_blank, *btn_open, *btn_terminal, *btn_gitg;
 
     window = gtk_application_window_new (app);
 
@@ -522,24 +486,29 @@ GtkWidget *create_main_window (GtkApplication *app)
                                                 GTK_ICON_SIZE_BUTTON);
     btn_terminal = gtk_button_new_from_icon_name ("utilities-terminal",
                                                 GTK_ICON_SIZE_BUTTON);
+    btn_gitg = gtk_button_new_from_icon_name ("org.gnome.gitg",
+                                                GTK_ICON_SIZE_BUTTON);
     g_signal_connect (G_OBJECT(btn_blank), "clicked",
                         G_CALLBACK(cb_btnblank_clicked), pv);
     g_signal_connect (G_OBJECT(btn_open), "clicked",
                         G_CALLBACK(cb_btnopen_clicked), pv);
     g_signal_connect (G_OBJECT(btn_terminal), "clicked",
                         G_CALLBACK(cb_btnterminal_clicked), pv);
-
-    // 検索入力
-    GtkEntryBuffer *entbuff = gtk_entry_buffer_new (NULL,256);
-    GtkWidget *ent_search = gtk_entry_new_with_buffer (entbuff);
+    g_signal_connect (G_OBJECT(btn_gitg), "clicked",
+                        G_CALLBACK(cb_btngitg_clicked), pv);
 
     // 検索用フィルタモデル
-    searchvalue = gtk_entry_buffer_get_text (entbuff);
     GtkTreeModel *model = gtk_tree_model_filter_new (GTK_TREE_MODEL (projectlist), NULL);
     gtk_tree_model_filter_set_visible_func (GTK_TREE_MODEL_FILTER (model),
                                                   visible_func, NULL, NULL);
     gtk_tree_view_set_model (GTK_TREE_VIEW (pv), model);
 
+    // 検索入力
+    // searchvalue は GtkTreeViewのvisible_funcにて参照されるので、
+    // gtk_widget_show_all実行迄に初期化しておく事。
+    GtkEntryBuffer *entbuff = gtk_entry_buffer_new (NULL,256);
+    GtkWidget *ent_search = gtk_entry_new_with_buffer (entbuff);
+    searchvalue = gtk_entry_buffer_get_text (entbuff);
     g_signal_connect (G_OBJECT(entbuff), "inserted-text",
                         G_CALLBACK(cb_entbuff_inserted_text), model);
     g_signal_connect (G_OBJECT(entbuff), "deleted-text",
@@ -553,6 +522,7 @@ GtkWidget *create_main_window (GtkApplication *app)
     gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_blank);
     gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_open);
     gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_terminal);
+    gtk_header_bar_pack_end (GTK_HEADER_BAR (header), btn_gitg);
     gtk_header_bar_pack_start (GTK_HEADER_BAR (header), ent_search);
 
     // まとめ
@@ -560,11 +530,11 @@ GtkWidget *create_main_window (GtkApplication *app)
     gtk_box_pack_start (GTK_BOX(hbox), sw, TRUE, TRUE, 5);
     gtk_container_add (GTK_CONTAINER(window), hbox);
     gtk_window_set_titlebar (GTK_WINDOW (window), header);
-    gtk_widget_set_size_request (window, 640, 480);
+    gtk_widget_set_size_request (window, 800, 600);
     gtk_window_set_position (GTK_WINDOW(window), GTK_WIN_POS_CENTER);
 
     // 既定のディレクトリからプロジェクトファイルを読み込んで ui に格納する
-    project_read_infofile (prjpath, 0);
+    read_project_all (prjpath, 0);
 
     return window;
 }
