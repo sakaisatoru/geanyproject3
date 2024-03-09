@@ -1,8 +1,8 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
-AC_INIT([geanyproject], [0.1.0], [endeavor2wako@gmail.com])
+AC_PREREQ([2.71])
+AC_INIT([geanyproject],[0.1.0],[endeavor2wako@gmail.com])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_HEADERS([config.h])
@@ -16,7 +16,7 @@ AC_SUBST(GETTEXT_PACKAGE)
 
 # Checks for libraries.
 AC_ARG_ENABLE(chooser,
-    AC_HELP_STRING([--disable-chooser], [force to use GtkFileSelector]))
+    AS_HELP_STRING([--disable-chooser],[force to use GtkFileSelector]))
 if test "$enable_chooser" != "no"; then
     PKG_CHECK_EXISTS(gtk+-2.0 >= 2.24.0,
     #~ PKG_CHECK_EXISTS(gtk+-3.0 >= 3.18.0,

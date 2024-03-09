@@ -482,7 +482,8 @@ GtkWidget *create_main_window (GtkApplication *app)
     // ボタン
     btn_blank = gtk_button_new_from_icon_name ("document-new",
                                                 GTK_ICON_SIZE_BUTTON);
-    btn_open = gtk_button_new_from_icon_name ("document-open",
+    //~ btn_open = gtk_button_new_from_icon_name ("document-open",
+    btn_open = gtk_button_new_from_icon_name ("org.geany.Geany",
                                                 GTK_ICON_SIZE_BUTTON);
     btn_terminal = gtk_button_new_from_icon_name ("utilities-terminal",
                                                 GTK_ICON_SIZE_BUTTON);
