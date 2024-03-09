@@ -224,15 +224,17 @@ visible_func (GtkTreeModel *model,
               GtkTreeIter  *iter,
               gpointer      data)
 {
-    gchar *description, *name;
+    gchar *description, *name, *timestamp;
     gboolean f = TRUE;
 
     gtk_tree_model_get (model, iter, _P_NAME, &name, -1);
     gtk_tree_model_get (model, iter, _P_DESCRIPTION, &description, -1);
+    gtk_tree_model_get (model, iter, _P_TIMESTAMP, &timestamp, -1);
     if (strlen (searchvalue) != 0) {
         // 検索文字列が名前及び説明文に含まれない場合は表示しない
         if (g_strrstr (description, searchvalue) == NULL &&
-            g_strrstr (name, searchvalue) == NULL) f = FALSE;
+            g_strrstr (name, searchvalue) == NULL &&
+            g_strrstr (timestamp, searchvalue) == NULL) f = FALSE;
     }
     g_free (description);
 
@@ -556,6 +558,34 @@ cb_activate_main (GtkApplication *app, gpointer userdata)
 }
 
 static void
+about_activated (GSimpleAction *action,
+                       GVariant      *parameter,
+                       gpointer       app)
+{
+    gchar *authors[] = { "endeavor wako", "sakai satoru", NULL };
+    GList *windows = gtk_application_get_windows (app);
+
+    gtk_show_about_dialog (windows->data,
+        "copyright", "endeavor wako 2024",
+        "authors", authors,
+        "translator-credits", "endeavor wako (japanese)",
+        "license-type", GTK_LICENSE_LGPL_2_1,
+        "logo-icon-name", "applications-development",
+        "program-name", PACKAGE,
+        "version", PACKAGE_VERSION,
+        NULL);
+}
+
+
+static void
+quit_activated (GSimpleAction *action,
+                GVariant      *parameter,
+                gpointer       app)
+{
+    g_application_quit (G_APPLICATION (app));
+}
+
+static void
 cb_startup_main (GtkApplication *app, gpointer userdata)
 {
     g_message ("start up.");
@@ -574,6 +604,42 @@ cb_startup_main (GtkApplication *app, gpointer userdata)
         g_strfreev (v);
     }
     g_key_file_free (kconf);
+
+
+    static GActionEntry app_entries[] =
+    {
+      { "about", about_activated, NULL, NULL, NULL },
+      { "quit", quit_activated, NULL, NULL, NULL }
+    };
+
+    /* アプリケーションメニューの構築 */
+    GtkBuilder *builder = gtk_builder_new_from_string (
+    "<interface>"
+    "<!-- interface-requires gtk+ 3.0 -->"
+    "<menu id=\"appmenu\">"
+    "<section>"
+      "<item>"
+        "<attribute name=\"label\" translatable=\"yes\">_about</attribute>"
+        "<attribute name=\"action\">app.about</attribute>"
+      "</item>"
+      "<item>"
+        "<attribute name=\"label\" translatable=\"yes\">_Quit</attribute>"
+        "<attribute name=\"action\">app.quit</attribute>"
+      "</item>"
+    "</section>"
+    "</menu>"
+    "</interface>",
+                                            -1);
+    const gchar *quit_accels[2] = { "<Ctrl>Q", NULL };
+    g_action_map_add_action_entries (G_ACTION_MAP (app),
+                                   app_entries, G_N_ELEMENTS (app_entries),
+                                   app);
+    gtk_application_set_accels_for_action (app,
+                                         "app.quit",
+                                         quit_accels);
+
+    GMenuModel *app_menu = G_MENU_MODEL (gtk_builder_get_object (builder, "appmenu"));
+    gtk_application_set_app_menu (app, app_menu);
 }
 
 static void
