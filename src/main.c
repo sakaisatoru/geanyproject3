@@ -330,14 +330,14 @@ static void launch_geany (GtkWidget *widget, int mode)
             g_error ("起動に失敗しました。エラー番号 %d\n", errno);
         }
         else {
-            g_message ("孫プロセス %d を起動しました。", pid_2);
+            //~ g_message ("孫プロセス %d を起動しました。", pid_2);
             g_free (execprj);
             exit (0);
         }
     }
     else {
         // 親プロセス
-        g_message ("子プロセス %d を起動しました。", pid);
+        //~ g_message ("子プロセス %d を起動しました。", pid);
         waitpid (pid, &status, 0);
         g_free (execprj);
     }
@@ -545,14 +545,11 @@ GtkWidget *create_main_window (GtkApplication *app)
 static void
 cb_activate_main (GtkApplication *app, gpointer userdata)
 {
-    GList *windows;
-    g_message ("activate.");
+    //~ g_message ("activate.");
+    GList *windows = gtk_application_get_windows (app);
 
-    windows = gtk_application_get_windows (app);
-    if (windows == NULL) {
-        ui = create_main_window (app);
-    }
-
+    ui = (windows == NULL)? create_main_window (app):
+                             windows->data;
     gtk_widget_show_all (ui);
     gtk_window_present (GTK_WINDOW(ui));
 }
@@ -588,7 +585,7 @@ quit_activated (GSimpleAction *action,
 static void
 cb_startup_main (GtkApplication *app, gpointer userdata)
 {
-    g_message ("start up.");
+    //~ g_message ("start up.");
 
     GKeyFile *kconf = load_geany_config ();
     prjpath = g_key_file_get_string (kconf, "project",
@@ -648,7 +645,7 @@ cb_shutdown_main (GtkApplication *app, gpointer userdata)
     g_free (prjpath);
     g_free (terminal_cmd);
 
-    g_message ("shutdown.\n");
+    //~ g_message ("shutdown.\n");
 }
 
 static void init_locale (void)
@@ -670,7 +667,7 @@ int main (gint argc, gchar **argv)
     g_signal_connect (app, "activate", G_CALLBACK(cb_activate_main), NULL);
     g_signal_connect (app, "startup",  G_CALLBACK(cb_startup_main),  NULL);
     g_signal_connect (app, "shutdown", G_CALLBACK(cb_shutdown_main), NULL);
-    status = g_application_run (G_APPLICATION(app), argc, argv);
+    status = g_application_run (G_APPLICATION(app), 0, NULL);
     g_object_unref (app);
 
     return status;
